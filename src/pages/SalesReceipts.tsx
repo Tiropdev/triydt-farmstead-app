@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -85,21 +85,36 @@ const SalesReceipts = () => {
   // -------------------------------
   // 📄 Download full date range report
   // -------------------------------
-  const downloadReceipt = () => {
-    if (!sales || sales.length === 0) {
-      toast.error("No records to download");
-      return;
-    }
+// Full report
+const downloadReceipt = async () => {
+  if (!sales || sales.length === 0) {
+    toast.error("No records to download");
+    return;
+  }
 
-    const doc = new jsPDF();
+  const doc = new jsPDF();
+  
+  // Load the logo
+  const logoImg = new Image();
+  logoImg.src = `${window.location.origin}/farmLogo.png`;
+
+  // Wait for logo to load
+  logoImg.onload = () => {
+    const pageWidth = doc.internal.pageSize.width;
+    const logoWidth = 30; // width in mm
+    const logoHeight = 20; // height in mm
+    const x = (pageWidth - logoWidth) / 2; // center
+    doc.addImage(logoImg, 'PNG', x, 10, logoWidth, logoHeight);
+
+    // Title under logo
     doc.setFontSize(16);
-    doc.text("TRYDT Farmstead - Milk Sales Report", 14, 20);
+    doc.text("TRYDT Farmstead - Milk Sales Report", pageWidth / 2, 50, { align: 'center' });
     doc.setFontSize(11);
-    doc.text(`Report Period: ${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`, 14, 30);
-    doc.text(`Generated On: ${format(new Date(), "PPP")}`, 14, 37);
+    doc.text(`Report Period: ${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`, pageWidth / 2, 58, { align: 'center' });
+    doc.text(`Generated On: ${format(new Date(), "PPP")}`, pageWidth / 2, 65, { align: 'center' });
 
     autoTable(doc, {
-      startY: 45,
+      startY: 75,
       head: [["Metric", "Value"]],
       body: [
         ["Total Litres Sold", `${stats.litres.toFixed(1)} L`],
@@ -135,41 +150,39 @@ const SalesReceipts = () => {
 
     toast.success("Report downloaded successfully!");
   };
+};
 
   // -------------------------------
   // 📄 Download customer summary receipt
   // -------------------------------
-  const handleDownloadCustomerReceipt = (customerName: string) => {
-    if (!customerName) {
-      toast.error("Please select a customer first");
-      return;
-    }
+const handleDownloadCustomerReceipt = (customerName: string) => {
+  if (!customerName) return toast.error("Please select a customer");
 
-    const filteredSales = sales.filter((s) => s.customer_name === customerName);
-    if (filteredSales.length === 0) {
-      toast.error("No sales found for that customer in this period");
-      return;
-    }
+  const filteredSales = sales.filter(s => s.customer_name === customerName);
+  if (filteredSales.length === 0) return toast.error("No sales for this customer");
 
-    const totalLitres = filteredSales.reduce((sum, s) => sum + s.litres, 0);
-    const totalAmount = filteredSales.reduce((sum, s) => sum + s.amount, 0);
-    const mpesaTotal = filteredSales.filter(s => s.payment_method === 'mpesa').reduce((sum, s) => sum + s.amount, 0);
-    const cashTotal = filteredSales.filter(s => s.payment_method === 'cash').reduce((sum, s) => sum + s.amount, 0);
-    const bankTotal = filteredSales.filter(s => s.payment_method === 'bank').reduce((sum, s) => sum + s.amount, 0);
-    const creditTotal = filteredSales.filter(s => s.payment_method === 'credit').reduce((sum, s) => sum + s.amount, 0);
+  const doc = new jsPDF();
+  const logoImg = new Image();
+  logoImg.src = `${window.location.origin}/farmLogo.png`;
 
-    const doc = new jsPDF();
+  logoImg.onload = () => {
+    const pageWidth = doc.internal.pageSize.width;
+    const logoWidth = 30;
+    const logoHeight = 20;
+    const x = (pageWidth - logoWidth) / 2;
+    doc.addImage(logoImg, 'PNG', x, 10, logoWidth, logoHeight);
+
     doc.setFontSize(16);
-    doc.text("TRYDT Farmstead - Customer Summary Receipt", 14, 20);
+    doc.text("TRYDT Farmstead - Customer Summary Receipt", pageWidth / 2, 50, { align: 'center' });
     doc.setFontSize(11);
-    doc.text(`Customer: ${customerName}`, 14, 30);
-    doc.text(`Period: ${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`, 14, 37);
-    doc.text(`Generated on: ${format(new Date(), "PPP p")}`, 14, 44);
+    doc.text(`Customer: ${customerName}`, pageWidth / 2, 58, { align: 'center' });
+    doc.text(`Period: ${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`, pageWidth / 2, 65, { align: 'center' });
+    doc.text(`Generated on: ${format(new Date(), "PPP p")}`, pageWidth / 2, 72, { align: 'center' });
 
     autoTable(doc, {
-      startY: 55,
+      startY: 80,
       head: [["Date", "Litres", "Amount (KES)", "Payment Method"]],
-      body: filteredSales.map((s) => [
+      body: filteredSales.map(s => [
         format(new Date(s.date), "PPP"),
         s.litres.toFixed(1),
         s.amount.toFixed(2),
@@ -179,21 +192,17 @@ const SalesReceipts = () => {
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 10;
+    const totalLitres = filteredSales.reduce((sum, s) => sum + s.litres, 0);
+    const totalAmount = filteredSales.reduce((sum, s) => sum + s.amount, 0);
     doc.setFontSize(12);
     doc.text(`Total Litres: ${totalLitres.toFixed(1)} L`, 14, finalY);
     doc.text(`Total Amount: KES ${totalAmount.toFixed(2)}`, 14, finalY + 7);
-    doc.text(`M-Pesa: KES ${mpesaTotal.toFixed(2)}`, 14, finalY + 14);
-    doc.text(`Cash: KES ${cashTotal.toFixed(2)}`, 14, finalY + 21);
-    doc.text(`Bank: KES ${bankTotal.toFixed(2)}`, 14, finalY + 28);
-    doc.text(`Credit: KES ${creditTotal.toFixed(2)}`, 14, finalY + 35);
-
     const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(9);
     doc.text("Generated by TRYDT Farmstead System | © 2025", 14, pageHeight - 10);
-
-    doc.save(`${customerName.replace(/\s+/g, "_")}_${format(dateRange.from, "yyyy-MM-dd")}_to_${format(dateRange.to, "yyyy-MM-dd")}_summary.pdf`);
+    doc.save(`${customerName.replace(/\s+/g, "_")}_summary.pdf`);
     toast.success(`Receipt for ${customerName} downloaded`);
   };
+};
 
   // -------------------------------
   // 📊 Table columns
