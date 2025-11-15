@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,18 +18,26 @@ import { Breadcrumb } from '@/components/Breadcrumb';
 const MilkSales = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+
   const [date, setDate] = useState<Date>(new Date());
   const [customerName, setCustomerName] = useState('');
   const [litres, setLitres] = useState('');
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'cash' | 'credit'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'cash' | 'credit' | 'bank'>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [savedCustomers, setSavedCustomers] = useState<string[]>([]);
+
+  // Load saved customers on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('savedCustomers');
+    if (stored) setSavedCustomers(JSON.parse(stored));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!customerName.trim() || !litres || parseFloat(litres) <= 0 || !amount || parseFloat(amount) <= 0) {
-      toast.error('Please fill in all fields with valid values');
+
+    if (!customerName.trim() || !amount || parseFloat(amount) <= 0) {
+      toast.error('Please fill in customer name and valid amount');
       return;
     }
 
@@ -38,13 +46,20 @@ const MilkSales = () => {
       const { error } = await supabase.from('milk_sales').insert({
         date: format(date, 'yyyy-MM-dd'),
         customer_name: customerName.trim(),
-        litres: parseFloat(litres),
+        litres: litres ? parseFloat(litres) : null,
         amount: parseFloat(amount),
         payment_method: paymentMethod,
         recorded_by: user?.email || 'Unknown'
       });
 
       if (error) throw error;
+
+      // Save new customer locally
+      if (customerName.trim() && !savedCustomers.includes(customerName.trim())) {
+        const updated = [...savedCustomers, customerName.trim()];
+        setSavedCustomers(updated);
+        localStorage.setItem('savedCustomers', JSON.stringify(updated));
+      }
 
       toast.success('Milk sale recorded successfully');
       setCustomerName('');
@@ -114,18 +129,32 @@ const MilkSales = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="customerName">Customer Name</Label>
+              <Label>Customer Name</Label>
+
+              {savedCustomers.length > 0 && (
+                <Select onValueChange={(v) => setCustomerName(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select saved customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedCustomers.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
               <Input
-                id="customerName"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Enter customer name"
-                required
+                placeholder="Or type new customer name…"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="litres">Litres</Label>
+              <Label htmlFor="litres">Litres (Optional)</Label>
               <Input
                 id="litres"
                 type="number"
@@ -134,7 +163,6 @@ const MilkSales = () => {
                 value={litres}
                 onChange={(e) => setLitres(e.target.value)}
                 placeholder="0.0"
-                required
               />
             </div>
 
